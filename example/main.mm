@@ -12,8 +12,14 @@
 #include <CoreServices/CoreServices.h>
 #include <CoreAudio/CoreAudio.h>
 #include "../api/audiorec.h"
+#include <AVFAudio/AVFAudio.h>
 
-#define VERSION "1.00"
+#define VERSION "1.01"
+
+typedef struct {
+    AVAudioFile *fileRef;
+    AVAudioFormat *format;
+} user_data_t;
 
 enum class StreamDirection : UInt32 {
     output,
@@ -72,8 +78,16 @@ void catalogDeviceStreams(AudioObjectID did,
     }
 }
 
-bool makeRecordingFile(pid_t pid, char* c_path, AudioStreamBasicDescription* format, ExtAudioFileRef* file)
+bool makeRecordingFile(pid_t pid, char* c_path, AudioStreamBasicDescription* format,AVAudioFormat** outFormat, AVAudioFile** file)
 {
+    *outFormat = [[AVAudioFormat alloc] initWithStreamDescription:format];
+
+    NSDictionary *settings = [NSDictionary dictionaryWithObjectsAndKeys:
+                      [NSNumber numberWithInt:format->mFormatID],  AVFormatIDKey,
+                      [NSNumber numberWithFloat: format->mSampleRate], AVSampleRateKey,
+                      [NSNumber numberWithInt:format->mChannelsPerFrame],  AVNumberOfChannelsKey,
+                      nil];
+
     NSDate *date = [NSDate date];
     NSDateFormatter *dateFormatter = [[NSDateFormatter alloc] init];
     [dateFormatter setTimeStyle:NSDateFormatterMediumStyle];
@@ -84,17 +98,26 @@ bool makeRecordingFile(pid_t pid, char* c_path, AudioStreamBasicDescription* for
     dateString = [dateString stringByReplacingOccurrencesOfString:@":" withString:@"-"];
     dateString = [dateString stringByReplacingOccurrencesOfString:@"+" withString:@""];
     [dateFormatter release];
-    auto* path = [NSString stringWithFormat: @"%s/pid-%d-recording-%@.caf", c_path, pid, dateString];
+    auto* path = [NSString stringWithFormat: @"%s/pid-%d-recording-%@.wav", c_path, pid, dateString];
     auto* url = [NSURL fileURLWithPath: path];
 
-    *file = nullptr;
-    auto error = ExtAudioFileCreateWithURL((__bridge CFURLRef)url,
-              kAudioFileCAFType, format, nullptr, kAudioFileFlags_EraseFile, file);
-    if (error != 0) {
-        return false;
+    *file = nil;
+    NSError* error = nil;
+    *file = [[AVAudioFile alloc] initForWriting: url
+                                             settings: settings
+                                         commonFormat: AVAudioPCMFormatFloat32
+                                          interleaved: (*outFormat).interleaved
+                                                error: &error ];
+    if(error != nil)
+    {
+      if(*outFormat) {
+        [*outFormat release];
+      }
+      if(*file) {
+        [*file release];
+      }
+      return false;
     }
-
-    ExtAudioFileSetProperty(*file, kExtAudioFileProperty_ClientDataFormat, sizeof(*format), format);
     return true;
 }
 
@@ -106,29 +129,26 @@ void audio_callback(AudioObjectID          objID,
                     const AudioTimeStamp*  inOutputTime,
                     void*                  inUserData) noexcept
 {
-  UInt32 numberFramesToRecord = inInputData->mBuffers[0].mDataByteSize / (inInputData->mBuffers[0].mNumberChannels * sizeof(Float32));
-
-  for (size_t index = 0; index < inInputData->mNumberBuffers; ++index) {
-    AudioBuffer buffer = inInputData->mBuffers[index];
-    AudioBufferList writeData;
-    writeData.mNumberBuffers = 1;
-    writeData.mBuffers[0] = buffer;
-    ExtAudioFileWriteAsync(*((ExtAudioFileRef*)inUserData), numberFramesToRecord, &writeData);
-  }
+  user_data_t *u = (user_data_t*) inUserData;
+  AVAudioPCMBuffer* buffer = [[ AVAudioPCMBuffer alloc] initWithPCMFormat: u->format
+                                                         bufferListNoCopy: inInputData
+                                                         deallocator: nil];
+  [u->fileRef writeFromBuffer: buffer error:nil];
+  [buffer release];
 }
 
 int record_audio(int pid, char* path)
 {
-    std::map<std::string, pid_t> audioPids;
-    aur_getAudioPIDList(audioPids);
-    auto ret = audioPids.find("Safari Graphics and Media");
+    std::map<pid_t, std::string> audioPids;
+    aur_getAudioNamesOrderedByPid(audioPids);
+    auto ret = audioPids.find(pid);
     if(ret == audioPids.end()) {
       printf("You need to launch Safari!\n");
       return -1;
     }
 
     aur_rec_t *h = nullptr;
-    bool res = aur_init(ret->second, audio_callback, &h);
+    bool res = aur_init(ret->first, audio_callback, &h);
     if(!res) {
       printf("Can't initialize audio recording for pid %d!\n", pid);
       return -1;
@@ -138,14 +158,20 @@ int record_audio(int pid, char* path)
     std::shared_ptr<std::vector<AudioStreamBasicDescription>> outputStreamList = std::make_shared<std::vector<AudioStreamBasicDescription>>();
 
     catalogDeviceStreams(h->aggregatedID, inputStreamList, outputStreamList);
-    ExtAudioFileRef fileRef;
-    res = makeRecordingFile(pid, path, &inputStreamList->at(0), &fileRef);
+
+    user_data_t params;
+    params.fileRef = nil;
+    params.format = nil;
+    res  = makeRecordingFile(pid, path, &inputStreamList->at(0), &params.format, &params.fileRef);
+
     if(!res) {
       printf("creation of recording file failed!");
       aur_deinit(h);
       return -1;
     }
-    res = aur_start(h, &fileRef);
+
+    res = aur_start(h, &params);
+
     if(!res) {
       printf("failed to start audio capturing!\n");
       aur_deinit(h);
@@ -155,7 +181,8 @@ int record_audio(int pid, char* path)
     printf("Audio recording started, press enter to stop...\n");
     getchar();
     aur_stop(h);
-    ExtAudioFileDispose(fileRef);
+    [params.fileRef release];
+    [params.format release];
     aur_deinit(h);
     return 0;
 }
@@ -179,7 +206,7 @@ int main(int argc, char *argv[])
     if(argc == 2 && strncmp(argv[1], "-l", 2)==0) {
       std::map<std::string, pid_t> audioPids;
       std::map<std::string, pid_t>::iterator it;
-      aur_getAudioPIDList(audioPids);
+      aur_getAudioPidsOrderedByName(audioPids);
       for (it = audioPids.begin(); it != audioPids.end(); it++)
       {
           printf("%d %s\n", (int)it->second, (char*)it->first.c_str());

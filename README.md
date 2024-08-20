@@ -68,5 +68,5 @@ Then record an audio from a desired process. For example for Safari:
  ./build/audio_rec -p 757 .
 ```
 When the recording is stopped you'll get a recorded file with the 
-name like pid-757-recording-8_Jul_2024_at_17-35-55.caf in your current folder.
+name like pid-757-recording-8_Jul_2024_at_17-35-55.wav in your current folder.
 

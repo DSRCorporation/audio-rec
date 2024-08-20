@@ -83,16 +83,23 @@ static OSStatus ioproc(AudioObjectID          objID,
     return kAudioHardwareNoError;;
 }
 
-
-void aur_getAudioPIDList(std::map<std::string, pid_t> &audioPids)
+static void aur_getAudioPidsInternal(std::map<std::string, pid_t> *p1,
+                                     std::map<pid_t,std::string> *p2)
 {
     std::map<pid_t, std::string>* allPids = aur_GetBSDProcessList();
 
     if(!allPids) {
         return;
     }
-    
-    audioPids.clear();
+
+    if(p1) {
+      p1->clear();
+    }
+
+    if(p2) {
+      p2->clear();
+    }
+
     AudioObjectID obj = kAudioObjectSystemObject;
     AudioObjectPropertyAddress addr;
     addr.mSelector = kAudioHardwarePropertyProcessObjectList;
@@ -123,16 +130,31 @@ void aur_getAudioPIDList(std::map<std::string, pid_t> &audioPids)
            if(s == kAudioHardwareNoError) {
               auto elem = allPids->find(pid);
               if(elem != allPids->end()) {
-                 audioPids[elem->second] = pid;
+                if(p1) {
+                  (*p1)[elem->second] = pid;
+                }
+                else if(p2)
+                {
+                  (*p2)[pid] = elem->second;
+                }
               }
            }
         }
       }
     }
-
+    delete allPids;
     delete[] p;
 }
 
+void aur_getAudioPidsOrderedByName(std::map<std::string, pid_t> &pids)
+{
+  aur_getAudioPidsInternal(&pids, nullptr);
+}
+
+void aur_getAudioNamesOrderedByPid(std::map<pid_t,std::string> &pids)
+{
+  aur_getAudioPidsInternal(nullptr, &pids);
+}
 
 bool aur_init(pid_t          in_pid,
               aur_callback_t in_callbackRec,

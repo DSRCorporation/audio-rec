@@ -26,14 +26,24 @@ typedef struct
 } aur_rec_t;
 
 /**
- * @brief aur_getAudioPIDList() function gets pids of all existent
+ * @brief aur_getAudioPidsOrderedByName() function gets pids of all existent
  *        client processes currently connected to audio system.
  * @param pids - map which contains pids. The key of the map represents
  *               user friendly name of process which can be used by GUI
  *               to show it to user.
  */
 
-void aur_getAudioPIDList(std::map<std::string, pid_t> &pids);
+void aur_getAudioPidsOrderedByName(std::map<std::string, pid_t> &pids);
+
+/**
+ * @brief aur_getAudioNamesOrderedByPid() function gets pids of all existent
+ *        client processes currently connected to audio system.
+ * @param pids - map which contains pids. The key of the map is pid,
+ *               value is a user friendly name of process which can be
+ *               used by GUI to show it to user.
+ */
+
+void aur_getAudioNamesOrderedByPid(std::map<pid_t,std::string> &pids);
 
 /**
  * @brief aur_init() function initializes a capturing audio session from

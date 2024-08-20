@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
+#set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "14.2" CACHE STRING "Minimum OS X deployment version" FORCE)
 project(audio_rec LANGUAGES CXX)
 
@@ -23,6 +24,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 #find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Core)
 
 find_library(AUDIO_TOOLBOX AudioToolbox)
+find_library(AVF_AUDIO AVFAudio)
 find_library(CORE_AUDIO CoreAudio)
 find_library(CORE_SERVICES CoreServices)
 find_library(APPKIT AppKit)
@@ -36,6 +38,7 @@ add_executable(audio_rec
 #target_link_libraries(audio_rec Qt${QT_VERSION_MAJOR}::Core)
 
 target_link_libraries(audio_rec ${AUDIO_TOOLBOX})
+target_link_libraries(audio_rec ${AVF_AUDIO})
 target_link_libraries(audio_rec ${CORE_AUDIO})
 target_link_libraries(audio_rec ${CORE_SERVICES})
 target_link_libraries(audio_rec ${APPKIT})
