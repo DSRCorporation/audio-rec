@@ -194,7 +194,7 @@ void show_usage()
   printf("Usage: audio_rec [command]\n");
   printf("Commands:\n");
   printf("    -l - to show list of process pids to record audio from.\n");
-  printf("    -r [pid] [filepath] - to record an audio from process with pid\n");
+  printf("    -p [pid] [filepath] - to record an audio from process with pid\n");
   printf("                          to folder specified by filepath.\n");
   printf("Examples:\n");
   printf("   audio_rec -l\n");
