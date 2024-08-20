@@ -143,7 +143,7 @@ int record_audio(int pid, char* path)
     aur_getAudioNamesOrderedByPid(audioPids);
     auto ret = audioPids.find(pid);
     if(ret == audioPids.end()) {
-      printf("You need to launch Safari!\n");
+      printf("Can't initialize audio recording, there is no any active audio session for pid %d.\n", pid);
       return -1;
     }
 
