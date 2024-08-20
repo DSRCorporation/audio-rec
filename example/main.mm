@@ -179,7 +179,8 @@ int record_audio(int pid, char* path)
     }
 
     printf("Audio recording started, press enter to stop...\n");
-    getchar();
+    int c = 0;
+    while (read(STDIN_FILENO, &c, 1) == 1 && c != '\n');
     aur_stop(h);
     [params.fileRef release];
     [params.format release];
